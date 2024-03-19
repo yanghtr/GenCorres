@@ -1,0 +1,139 @@
+seed: 1
+dataset_exp_name: smal
+data_dir: /scratch/cluster/yanght/Dataset/Human/SMAL/
+work_dir: ./work_dir/
+latent_dim: 128
+latent_dim_mesh: 64
+num_workers: 4 # 16
+
+dataset:
+    module_name: smal
+    class_name: SMALDataSet
+    data_dir: ${data_dir}
+
+    sdf_dir: ${data_dir}/registrations_processed_sal_sigma03/
+
+    with_raw_mesh: True
+    raw_mesh_dir: ${data_dir}/registrations/
+    raw_mesh_file_type: obj
+
+    with_registration: False
+    registration_dir: ${data_dir}/registrations/
+
+    # with_sim_mesh: True
+    # sim_mesh_dir: ${data_dir}/registrations_sim/
+    
+    init_mesh_dir: ./registration_smal/smal/mesh_corres
+    use_vert_pca: True
+    pca_n_comp: ${latent_dim_mesh}
+
+    template_path: ${data_dir}/registrations/smal401/pose/000.obj # template
+    num_samples: 8192
+    split_cfg:
+        train: test_94.json # In JSM, only test_94.json is available. In shape space, use train_289.json
+        test: test_94.json # split
+
+sdf_asap_start_epoch: 4000
+
+model: 
+    mesh:
+        module_name: meshnet
+        class_name: MeshNet
+        auto_decoder: True
+        in_channels: 3
+        out_channels: [16, 16, 16, 32]
+        latent_channels: ${latent_dim_mesh}
+        K: 6
+        ds_factors: [1, 1, 1, 1]
+    
+    sdf:
+        module_name: implicit_vae
+        class_name: ImplicitGenerator
+        auto_decoder: False
+        encoder:
+            with_normals: False
+        decoder:
+            latent_size: ${latent_dim}
+            dims : [ 512, 512, 512, 512, 512, 512, 512, 512 ]
+            norm_layers : [0, 1, 2, 3, 4, 5, 6, 7]
+            latent_in : [4]
+            weight_norm : True
+            xyz_dim : 3
+
+loss:
+    ###### mesh ######
+    # Mesh ARAP loss
+    mesh_arap_weight: 0.0005 # 5e-4
+    use_mesh_arap_epoch: 1000
+    use_mesh_arap_with_asap: True
+    mesh_weight_asap: 0.1
+    nz_max: 64 # random sample nz_max latent channels to compute ARAP energy
+    chamfer_loss_weight: 1
+    point2point_loss_weight: 1
+    point2plane_loss_weight: 0
+    ###### sdf ######
+    # SDF loss
+    sdf_weight: 1.0
+    sdf_loss_type: L1
+    # VAE latent reg loss
+    vae_latent_reg_weight: 0.001
+    # AD latent reg loss
+    ad_latent_reg_weight: 0.0
+    # sdf grad loss
+    grad_loss_weight: 0.1
+    # sdf surfafe ARAP loss
+    use_sdf_asap_epoch: ${sdf_asap_start_epoch}
+    simplify_mesh: True
+    implicit_reg_type: 'dense_inverse'
+    sample_latent_space: True
+    sample_latent_space_type: 'line' # normal, line
+    sample_latent_space_detach: False
+    sdf_asap_weight: 0.001
+    weight_asap: 0.1
+    mu_asap: 0.0001
+    add_mu_diag_to_hessian: True
+    sdf_grid_size: 50
+    x_range: [-1.4, 0.95]
+    y_range: [-0.75, 0.7]
+    z_range: [-0.85, 1.2]
+    # cyc regularization
+    use_cyc_reg: True
+    eps_cyc: 0.001
+    sdf_cyc_weight: 0.0001
+
+
+optimization:
+    mesh:
+        batch_size: 8 # 64
+        lr: 0.01
+        lr_decay: 0.99
+        decay_step: 3
+        num_epochs: 2000
+        
+        lat_vecs:
+            lr: 0.01
+            test_lr: 0.01
+            test_lr_decay: 0.99
+            test_decay_step: 1
+            num_test_epochs: 2500001
+    
+    sdf:
+        batch_size: 8
+        lr: 0.005
+        gammas:     [ 0.5,  0.5,  0.5,    2,  0.5,  0.5,  0.5]
+        milestones: [1000, 2000, 3000, 4000, 5000, 6000, 7000]
+        num_epochs: 5000001 # 5001
+        
+        lat_vecs:
+            lr: 0.01
+            test_lr: 0.001 # 0.005
+            test_lr_decay: 0.1
+            test_decay_step: 400
+            num_test_epochs: 801
+    
+log:
+    log_batch_interval: 100
+    save_epoch_interval: 500
+    save_latest_epoch_interval: 100
+
+

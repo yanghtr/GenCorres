@@ -1,0 +1,6 @@
+*.pkl
+*.json
+__pycache__
+*/__pycache__
+*/*/__pycache__
+registration/multiCorres_sync_dfaust1k/multi_condor/*
